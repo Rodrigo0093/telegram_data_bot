@@ -1,46 +1,54 @@
-from sqlalchemy import Column, Integer, String, Text, Date, Numeric, ForeignKey, UniqueConstraint, TIMESTAMP, func
+# models.py
+
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
-class Store(Base):
-    __tablename__ = "stores"
-
-    id = Column(Integer, primary_key=True)
-    store_code = Column(Integer, unique=True, nullable=False)
-    city = Column(String)
-    address = Column(Text)
-
-    sales = relationship("SaleData", back_populates="store")
-
-
 class Region(Base):
+    """
+    Модель региона (город, регион, округ)
+    """
     __tablename__ = "regions"
 
     id = Column(Integer, primary_key=True)
-    city = Column(String, unique=True)
-    region = Column(String)
-    district = Column(String)
+    city = Column(String, nullable=False)
+    region = Column(String, nullable=True)
+    district = Column(String, nullable=True)
 
+    stores = relationship("Store", back_populates="region")
     sales = relationship("SaleData", back_populates="region")
 
-
-class SaleData(Base):
-    __tablename__ = "sales_data"
+class Store(Base):
+    """
+    Модель магазина: код, город, адрес
+    """
+    __tablename__ = "stores"
 
     id = Column(Integer, primary_key=True)
-    bs_number = Column(String, unique=True, nullable=False)  # БС№
-    store_code = Column(Integer, ForeignKey("stores.store_code"))
-    policy_type = Column(Text)
-    category = Column(String)
-    product_name = Column(Text)
-    sale_date = Column(Date)
-    start_date = Column(Date)
-    end_date = Column(Date)
-    days_left = Column(Integer)
-    price = Column(Numeric)
-    region_id = Column(Integer, ForeignKey("regions.id"))
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    store_code = Column(String, unique=True, nullable=False)
+    city = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=False)
+
+    region = relationship("Region", back_populates="stores")
+    sales = relationship("SaleData", back_populates="store")
+
+class SaleData(Base):
+    """
+    Модель продаж: товар, цена, срок действия и связи с магазином и регионом
+    """
+    __tablename__ = "sales"
+
+    id = Column(Integer, primary_key=True)
+    bs_number = Column(String, nullable=False)
+    product_name = Column(String, nullable=False)
+    category = Column(String, nullable=True)
+    price = Column(Float, nullable=True)
+    end_date = Column(Date, nullable=True)
+
+    store_id = Column(Integer, ForeignKey("stores.id"), nullable=False)
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=False)
 
     store = relationship("Store", back_populates="sales")
     region = relationship("Region", back_populates="sales")

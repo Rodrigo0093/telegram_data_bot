@@ -1,29 +1,30 @@
-from aiogram import Router, types, F
+# bot/handlers/search.py
+from aiogram import Router, F
+from aiogram.types import Message
 from aiogram.filters import Command
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.utils.db_utils import get_all_categories, get_all_regions, search_items
-
+from bot.keyboards.inline import get_back_main_keyboard
+from bot.utils.db_utils import search_items
 
 router = Router()
 
+# Обработка команды /search
+@router.message(Command(commands=["search"]))
+async def cmd_search(message: Message):
+    await message.answer("Введите запрос в формате: Поиск: <слово>")
 
-@router.message(Command("поиск"))
-async def start_search(message: types.Message):
-    await message.answer("Введите запрос для поиска (наименование или артикул):")
-
-
-@router.message(F.text.len() > 2)
-async def handle_search_query(message: types.Message):
-    query = message.text.strip()
-    results = search_items(query=query, limit=5)
+# Обработка сообщения, начинающегося с "Поиск:"
+@router.message(lambda msg: msg.text and msg.text.startswith("Поиск:"))
+async def handle_search_query(message: Message):
+    query = message.text[7:].strip()  # Удаляем "Поиск:" и пробелы
+    results = search_items(query)
 
     if not results:
-        await message.answer("Ничего не найдено.")
+        await message.answer("❌ Ничего не найдено по запросу.", reply_markup=get_back_main_keyboard())
         return
 
-    text = "\n\n".join(
-        [f"<b>{r.product_name}</b>\nЦена: {r.price}₽\nГород: {r.region.city}" for r in results]
-    )
-
-    await message.answer(text)
+    response = "\n".join([
+        f"<b>{item.product_name}</b> — {item.price} ₽ — {item.region.region} ({item.region.city})"
+        for item in results[:5]
+    ])
+    await message.answer(response, reply_markup=get_back_main_keyboard())

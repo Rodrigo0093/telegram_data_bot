@@ -1,11 +1,17 @@
+# main.py
+
 import asyncio
 import logging
 import os
+import sys
+
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
+
+from bot.utils.db_utils import import_data  # Функция импорта данных
 
 # Настройка логирования
 logging.basicConfig(
@@ -14,46 +20,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Загрузка переменных окружения из .env
 load_dotenv()
 
-async def main():
-    # Проверка токена
+
+async def run_bot():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
-        logger.error("Не найден BOT_TOKEN в .env файле!")
+        logger.error("❌ Не найден BOT_TOKEN в .env файле!")
         return
 
+    bot = Bot(
+        token=BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
+    dp = Dispatcher(storage=MemoryStorage())
+
+    # Регистрация всех роутеров из handlers
+    from bot.handlers import routers
+    for router in routers:
+        dp.include_router(router)
+
     try:
-        # Инициализация бота
-        bot = Bot(
-            token=BOT_TOKEN,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-        )
-        
-        # Создаем диспетчер
-        dp = Dispatcher(storage=MemoryStorage())
-        
-        # Подключаем хэндлеры
-        from bot.handlers import commands
-        dp.include_router(commands.router)
-        
-        # Тест БД перед запуском
-        logger.info("Проверка подключения к БД...")
-        from bot.utils import db_utils
-        categories = db_utils.get_all_categories()
-        regions = db_utils.get_all_regions()
-        logger.info(f"Категории: {len(categories)}, Регионы: {len(regions)}")
-        
-        # Запуск бота
-        logger.info("Бот запущен")
+        logger.info("▶ Бот запущен")
         await dp.start_polling(bot)
-        
-    except Exception as e:
-        logger.error(f"Ошибка при запуске: {e}")
     finally:
-        if 'bot' in locals():
-            await bot.session.close()
-        logger.info("Бот остановлен")
+        await bot.session.close()
+        logger.info("⛔ Бот остановлен")
+
+
+def update_database():
+    logger.info("📥 Обновление данных в БД...")
+    import_data()
+    logger.info("✅ Данные успешно обновлены.")
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    command = sys.argv[1] if len(sys.argv) > 1 else None
+
+    if command == "update":
+        update_database()
+    elif command == "runbot":
+        asyncio.run(run_bot())
+    else:
+        # По умолчанию: обновление данных + запуск бота
+        update_database()
+        asyncio.run(run_bot())

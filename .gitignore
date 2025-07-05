@@ -23,3 +23,7 @@ Thumbs.db
 
 # Игнорировать Excel-файл, если не нужен в репо
 data/data.xlsx
+data/city_regions.xlsx
+data/store_addresses.xlsx
+
+GIT_SETUP_GUIDE.md
