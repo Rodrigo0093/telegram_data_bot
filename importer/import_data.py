@@ -1,23 +1,37 @@
+# importer/import_data.py
+# Скрипт для импорта данных из Excel в базу данных
+
 import pandas as pd
 from sqlalchemy.orm import Session
 from db.database import engine, SessionLocal
 from db.models import Region, Store, SaleData
 from datetime import datetime
+import logging
 
-# Загрузка Excel файлов
+logger = logging.getLogger(__name__)
+
+# Утилита для безопасной обрезки строк из ячеек
+def safe_strip(val):
+    if isinstance(val, str):
+        return val.strip()
+    if pd.notna(val):
+        return str(val).strip()
+    return ""
+
+# Загрузка Excel-файлов
 data_df = pd.read_excel("data/data.xlsx")
 regions_df = pd.read_excel("data/city_regions.xlsx")
 stores_df = pd.read_excel("data/store_addresses.xlsx")
 
 # Словари справочников
 city_to_region = {
-    row["Город"].strip(): (row["Регион"].strip(), row["Округ"].strip())
+    safe_strip(row["Город"]): (safe_strip(row["Регион"]), safe_strip(row["Округ"]))
     for _, row in regions_df.iterrows()
     if pd.notna(row["Город"])
 }
 
 store_info = {
-    row["Магазин"].strip(): (row["Город"].strip(), row["Адрес"].strip())
+    safe_strip(row["Магазин"]): (safe_strip(row["Город"]), safe_strip(row["Адрес"]))
     for _, row in stores_df.iterrows()
     if pd.notna(row["Магазин"])
 }
@@ -52,38 +66,32 @@ def import_data():
 
         # Импорт продаж
         for _, row in data_df.iterrows():
-            code = str(row.get("Код магазина")).strip()
+            code = safe_strip(row.get("Код магазина"))
             store = store_cache.get(code)
             if not store:
                 continue
 
-            price = row.get("Цена")
-            try:
-                price = float(price)
-            except:
-                price = None
+            price = row.get("Цена") or 0
+            # Преобразуем дату окончания
+            end_date = row.get("Дата окончания")
+            end_date = pd.to_datetime(end_date) if pd.notna(end_date) else None
 
-            try:
-                date = pd.to_datetime(row.get("Дата окончания"))
-            except:
-                date = None
-
-            sale = SaleData(
-                bs_number=str(row.get("Номер БС")).strip(),
-                product_name=str(row.get("Наименование")),
-                category=str(row.get("Категория")),
-                price=price,
-                end_date=date,
+            sd = SaleData(
+                bs_number=safe_strip(row.get("БС№")),
+                product_name=safe_strip(row.get("Наименование")),
+                category=safe_strip(row.get("Категория")),
+                price=float(price),
+                end_date=end_date,
                 store=store,
                 region=store.region
             )
-            db.add(sale)
+            db.add(sd)
         db.commit()
 
-        print("✅ Импорт завершён успешно.")
-
+        logger.info("✅ Импорт данных завершён успешно.")
+    except Exception as e:
+        logger.exception("Ошибка при импорте данных:")
+        db.rollback()
+        raise
     finally:
         db.close()
-
-if __name__ == "__main__":
-    import_data()
