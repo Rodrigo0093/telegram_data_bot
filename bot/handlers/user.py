@@ -1,40 +1,44 @@
 # bot/handlers/user.py
+import logging
 
-from aiogram import Router, types
-from aiogram.filters import CommandStart
-from aiogram.types import Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command
 
-
+from bot.keyboards.inline import (
+    get_main_keyboard,
+    get_back_main_keyboard
+)
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
-@router.message(CommandStart())
-async def cmd_start(message: Message):
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Поиск", callback_data="start_search")
-    builder.button(text="Категории", callback_data="show_categories")
-    builder.button(text="Регионы", callback_data="show_regions")
-    builder.adjust(2)
-
-    await message.answer(
-        f"Привет, <b>{message.from_user.first_name}</b>!\n"
-        f"Я помогу тебе найти товар по названию, категории или региону.",
-        reply_markup=builder.as_markup()
-    )
+@router.message(Command(commands=["start", "help"]))
+async def send_welcome(message: Message):
+    try:
+        await message.answer("👋 Добро пожаловать! Выберите действие:", reply_markup=get_main_keyboard())
+        logger.info("Показано главное меню пользователю.")
+    except Exception as e:
+        logger.exception("Ошибка при показе главного меню")
+        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
 
 
-@router.callback_query(lambda c: c.data == "start_search")
-async def callback_search(call: types.CallbackQuery):
-    await call.message.answer("Введите запрос для поиска:")
+@router.callback_query(F.data == "back")
+async def handle_back(callback: CallbackQuery):
+    try:
+        await callback.message.edit_text("⬅ Вы вернулись назад.", reply_markup=get_main_keyboard())
+        await callback.answer()
+        logger.info("Переход назад выполнен.")
+    except Exception as e:
+        logger.exception("Ошибка при возврате назад")
 
 
-@router.callback_query(lambda c: c.data == "show_categories")
-async def callback_categories(call: types.CallbackQuery):
-    await call.message.answer("/категории")
-
-
-@router.callback_query(lambda c: c.data == "show_regions")
-async def callback_regions(call: types.CallbackQuery):
-    await call.message.answer("/регионы")
+@router.callback_query(F.data == "main_menu")
+async def handle_main_menu(callback: CallbackQuery):
+    try:
+        await callback.message.edit_text("🏠 Главное меню:", reply_markup=get_main_keyboard())
+        await callback.answer()
+        logger.info("Возврат в главное меню.")
+    except Exception as e:
+        logger.exception("Ошибка при возврате в главное меню")

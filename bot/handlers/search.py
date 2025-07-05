@@ -1,30 +1,61 @@
 # bot/handlers/search.py
+import logging
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 
-from bot.keyboards.inline import get_back_main_keyboard
+from bot.keyboards.inline import get_back_main_keyboard, get_main_keyboard
 from bot.utils.db_utils import search_items
 
 router = Router()
+logger = logging.getLogger(__name__)
 
-# Обработка команды /search
-@router.message(Command(commands=["search"]))
-async def cmd_search(message: Message):
-    await message.answer("Введите запрос в формате: Поиск: <слово>")
 
-# Обработка сообщения, начинающегося с "Поиск:"
-@router.message(lambda msg: msg.text and msg.text.startswith("Поиск:"))
-async def handle_search_query(message: Message):
-    query = message.text[7:].strip()  # Удаляем "Поиск:" и пробелы
-    results = search_items(query)
+@router.callback_query(F.data == "search")
+async def ask_search_query(callback: CallbackQuery):
+    try:
+        await callback.message.edit_text("🔎 Введите запрос для поиска:", reply_markup=get_back_main_keyboard())
+        await callback.answer()
+        logger.info("Запрошен ввод поискового запроса.")
+    except Exception as e:
+        logger.exception("Ошибка при запросе поискового запроса")
+        await callback.message.answer("❌ Произошла ошибка. Попробуйте позже.")
 
-    if not results:
-        await message.answer("❌ Ничего не найдено по запросу.", reply_markup=get_back_main_keyboard())
-        return
 
-    response = "\n".join([
-        f"<b>{item.product_name}</b> — {item.price} ₽ — {item.region.region} ({item.region.city})"
-        for item in results[:5]
-    ])
-    await message.answer(response, reply_markup=get_back_main_keyboard())
+@router.message()
+async def process_search_query(message: Message):
+    try:
+        query = message.text.strip()
+        if not query:
+            await message.answer("⚠ Пустой запрос. Введите текст для поиска.")
+            return
+
+        results = search_items(query=query)
+
+        if not results:
+            await message.answer("❌ Ничего не найдено.", reply_markup=get_back_main_keyboard())
+            return
+
+        # Формируем ответ
+        text_lines = [
+            f"<b>{item.name}</b>\nЦена: {item.price} руб.\nГород: {item.city}"
+            for item in results
+        ]
+        response = "\n\n".join(text_lines)
+
+        await message.answer(response, reply_markup=get_back_main_keyboard())
+        logger.info(f"Показаны результаты поиска по запросу: {query}")
+
+    except Exception as e:
+        logger.exception("Ошибка при обработке поискового запроса")
+        await message.answer("❌ Произошла ошибка при поиске. Попробуйте позже.")
+
+
+@router.callback_query(F.data == "main_menu")
+async def handle_main_menu(callback: CallbackQuery):
+    try:
+        await callback.message.edit_text("🏠 Главное меню:", reply_markup=get_main_keyboard())
+        await callback.answer()
+        logger.info("Возврат в главное меню из поиска.")
+    except Exception as e:
+        logger.exception("Ошибка при возврате в главное меню")
