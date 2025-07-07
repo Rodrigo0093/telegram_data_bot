@@ -27,3 +27,5 @@ data/city_regions.xlsx
 data/store_addresses.xlsx
 
 GIT_SETUP_GUIDE.md
+alembic_guide.md
+README.txt
